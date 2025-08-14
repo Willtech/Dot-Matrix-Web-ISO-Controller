@@ -3,7 +3,7 @@
 // REM  VERSION: Superchook Web Matrix Controller
 // REM  PLATFORM: ESP8266 + FC16 4x8x8 LED Matrix
 // REM  AUTHOR: Reaper Harvester / Wills / master Damian Williamson Grad.
-// REM  COLLABORATOR: Microsoft CoPilot (AI Companion)
+// REM  COLLABORATOR: Microsoft Copilot (AI Companion)
 // REM  DESCRIPTION:
 // REM    - Web-controlled scrolling matrix display
 // REM    - Wi-Fi STA/AP fallback with EEPROM credential storage
@@ -148,6 +148,20 @@ void handleRoot() {
         <option value="PA_RANDOM">Random</option>
       </select><br><br>
 
+      <label>Speed:</label>
+      <select id="speed">
+        <option value="1">Superfast (1ms)</option>
+        <option value="20">Fastest (20ms)</option>
+        <option value="25">Faster (25ms)</option>
+        <option value="50">Fast (50ms)</option>
+        <option value="75">Default (75ms)</option>
+        <option value="100">Slow (100ms)</option>
+        <option value="150">Slower (150ms)</option>
+        <option value="200">Deliberate (200ms)</option>
+        <option value="400">Crawl (400ms)</option>
+        <option value="1000">Snail (1000ms)</option>
+      </select><br><br>
+
       <button onclick="sendUpdate()">Update</button><br><br>
       <button onclick="playSuperchook()">Play Superchook</button><br><br>
       <a href="/wifi">Configure Wi-Fi</a><br><br>
@@ -162,6 +176,7 @@ void handleRoot() {
               document.getElementById("msg").value = params.get("msg");
               document.getElementById("align").value = params.get("align");
               document.getElementById("effect").value = params.get("effect");
+              document.getElementById("speed").value = params.get("speed");
             });
         };
 
@@ -169,7 +184,8 @@ void handleRoot() {
           const msg = document.getElementById('msg').value;
           const align = document.getElementById('align').value;
           const effect = document.getElementById('effect').value;
-          fetch(`/update?msg=${encodeURIComponent(msg)}&align=${align}&effect=${effect}`);
+          const speed = document.getElementById('speed').value;
+          fetch(`/update?msg=${encodeURIComponent(msg)}&align=${align}&effect=${effect}&speed=${speed}`);
         }
 
         function restoreDefaults() {
@@ -209,9 +225,25 @@ void handleUpdate() {
     else if (e == "PA_RANDOM") scrollEffect = PA_RANDOM;
   }
 
+  if (server.hasArg("speed")) {
+    scrollSpeed = server.arg("speed").toInt(); // ✅ direct conversion
+  }
+
+
   myDisplay.displayClear();
   myDisplay.displayScroll(scrollMessage.c_str(), textPosition, scrollEffect, scrollSpeed);
   Serial.println("Updated message: " + scrollMessage);
+  Serial.print("Configuration: ");
+  Serial.println((textPosition == PA_LEFT) ? "PA_LEFT" :
+                 (textPosition == PA_CENTER) ? "PA_CENTER" : "PA_RIGHT");
+  Serial.print("Effect       : ");
+  Serial.println((scrollEffect == PA_SCROLL_LEFT) ? "PA_SCROLL_LEFT" :
+                 (scrollEffect == PA_SCROLL_RIGHT) ? "PA_SCROLL_RIGHT" :
+                 (scrollEffect == PA_FADE) ? "PA_FADE" :
+                 (scrollEffect == PA_WIPE) ? "PA_WIPE" : "PA_RANDOM");
+  Serial.print("Speed: ");
+  Serial.println(scrollSpeed);
+  Serial.println(getSpeedLabel(scrollSpeed));
   server.send(200, "text/plain", "OK");
 }
 
@@ -223,7 +255,22 @@ void handleCurrent() {
                                   (scrollEffect == PA_SCROLL_RIGHT) ? "PA_SCROLL_RIGHT" :
                                   (scrollEffect == PA_FADE) ? "PA_FADE" :
                                   (scrollEffect == PA_WIPE) ? "PA_WIPE" : "PA_RANDOM");
+  response += "&speed=" + String(scrollSpeed);  // Direct ms value
   server.send(200, "text/plain", response);
+}
+
+String getSpeedLabel(uint16_t speed) {
+  if (speed == 1) return "Superfast (1ms)";
+  if (speed == 20) return "Fastest (20ms)";
+  if (speed == 25) return "Faster (25ms)";
+  if (speed == 50) return "Fast (50ms)";
+  if (speed == 75) return "Default (75ms)";
+  if (speed == 100) return "Slow (100ms)";
+  if (speed == 150) return "Slower (150ms)";
+  if (speed == 200) return "Deliberate (200ms)";
+  if (speed == 400) return "Crawl (400ms)";
+  if (speed == 1000) return "Snail (1000ms)";
+  return "Unknown";
 }
 
 void handleDefault() {
@@ -235,6 +282,7 @@ void handleDefault() {
   scrollMessage = "Welcome to the Workshop!";
   textPosition = PA_CENTER;
   scrollEffect = PA_SCROLL_LEFT;
+  scrollSpeed = 100; // Slow (100ms)
 
   myDisplay.displayClear();
   myDisplay.displayScroll(scrollMessage.c_str(), textPosition, scrollEffect, scrollSpeed);
@@ -381,13 +429,12 @@ void loop() {
   updateStatusPixel();
   if (scrollMessage.indexOf("Superchooks") >= 0) {
     playSuperchookAnimation();
-    scrollMessage = "";  // Clear after animation
     writeEEPROMString(200, scrollMessage);
     myDisplay.displayReset();
   }
 
   if (myDisplay.displayAnimate()) {
-    myDisplay.displayScroll(scrollMessage.c_str(), PA_CENTER, PA_SCROLL_LEFT, 100);
+    myDisplay.displayScroll(scrollMessage.c_str(), textPosition, scrollEffect, scrollSpeed);
     myDisplay.displayReset();
   }
 }
